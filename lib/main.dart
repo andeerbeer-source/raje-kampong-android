@@ -13,40 +13,48 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Background Firebase init error: $e');
+  }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
 
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  const AndroidInitializationSettings initSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initSettings =
-      InitializationSettings(android: initSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
+    const AndroidInitializationSettings initSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings =
+        InitializationSettings(android: initSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-  // Tampilkan notifikasi saat aplikasi sedang dibuka (foreground)
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    RemoteNotification? notification = message.notification;
-    if (notification != null) {
-      flutterLocalNotificationsPlugin.show(
-        notification.hashCode,
-        notification.title,
-        notification.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'raje_kampong_channel',
-            'Notifikasi Raje Kampong',
-            importance: Importance.max,
-            priority: Priority.high,
+    // Tampilkan notifikasi saat aplikasi sedang dibuka (foreground)
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      RemoteNotification? notification = message.notification;
+      if (notification != null) {
+        flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'raje_kampong_channel',
+              'Notifikasi Raje Kampong',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
           ),
-        ),
-      );
-    }
-  });
+        );
+      }
+    });
+  } catch (e) {
+    debugPrint('Inisialisasi Firebase/Notifikasi gagal: $e');
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString('auth_token');
@@ -206,20 +214,24 @@ class _DashboardPageState extends State<DashboardPage> {
       _userRole = prefs.getString('user_role') ?? '';
     });
 
-    final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-    final fcmToken = await messaging.getToken();
-    final authToken = prefs.getString('auth_token');
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      final fcmToken = await messaging.getToken();
+      final authToken = prefs.getString('auth_token');
 
-    if (fcmToken != null && authToken != null) {
-      await http.post(
-        Uri.parse('$baseUrl/fcm-token'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: {'fcm_token': fcmToken},
-      );
+      if (fcmToken != null && authToken != null) {
+        await http.post(
+          Uri.parse('$baseUrl/fcm-token'),
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $authToken',
+          },
+          body: {'fcm_token': fcmToken},
+        );
+      }
+    } catch (e) {
+      debugPrint('Gagal registrasi FCM token: $e');
     }
   }
 
