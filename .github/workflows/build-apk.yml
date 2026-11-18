@@ -72,35 +72,34 @@ jobs:
           EOF
           fi
 
-          # Add required permissions and FCM channel robustly to generated manifest.
+                    # Add required permissions and FCM channel robustly to generated manifest.
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path("android/app/src/main/AndroidManifest.xml")
           xml = path.read_text(encoding="utf-8")
+          nl = chr(10)
 
           for permission in (
               "android.permission.INTERNET",
               "android.permission.POST_NOTIFICATIONS",
           ):
               if permission not in xml:
-                  match = re.search(r"<application\\b", xml)
-                  if not match:
-                      raise SystemExit("Tag <application> tidak ditemukan di AndroidManifest.xml")
-                  tag = f'<uses-permission android:name="{permission}" />\\n    '
-                  xml = xml[:match.start()] + tag + xml[match.start():]
+                  pos = xml.find("<application")
+                  if pos < 0:
+                      raise SystemExit("Tag application tidak ditemukan di AndroidManifest.xml")
+                  xml = xml[:pos] + f'<uses-permission android:name="{permission}" />' + nl + "    " + xml[pos:]
 
           if "firebase.messaging.default_notification_channel_id" not in xml:
               metadata = ('    <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" '
-                          'android:value="raje_kampong_channel" />\\n    ')
-              xml = xml.replace("</application>", metadata + "</application>", 1)
+                          'android:value="raje_kampong_channel" />')
+              xml = xml.replace("</application>", metadata + nl + "    </application>", 1)
 
           path.write_text(xml, encoding="utf-8")
           print("AndroidManifest.xml berhasil diperbarui")
           PY
-
-                    echo "=== Android applicationId configuration ==="
+          
+                              echo "=== Android applicationId configuration ==="
           grep -n 'applicationId\|namespace\|minSdk' android/app/build.gradle* || true
           echo "=== Firebase package configuration ==="
           grep -n 'package_name' android/app/google-services.json
