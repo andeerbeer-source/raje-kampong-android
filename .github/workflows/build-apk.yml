@@ -72,16 +72,35 @@ jobs:
           EOF
           fi
 
-          # Required Android permissions and default FCM channel.
-          grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
-          if ! grep -q 'android.permission.POST_NOTIFICATIONS' android/app/src/main/AndroidManifest.xml; then
-            sed -i 's#<uses-permission android:name="android.permission.INTERNET"/>#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>#' android/app/src/main/AndroidManifest.xml
-          fi
-          if ! grep -q 'firebase.messaging.default_notification_channel_id' android/app/src/main/AndroidManifest.xml; then
-            sed -i 's#</application>#    <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="raje_kampong_channel" />\n    </application>#' android/app/src/main/AndroidManifest.xml
-          fi
+          # Add required permissions and FCM channel robustly to generated manifest.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-          echo "=== Android applicationId configuration ==="
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          xml = path.read_text(encoding="utf-8")
+
+          for permission in (
+              "android.permission.INTERNET",
+              "android.permission.POST_NOTIFICATIONS",
+          ):
+              if permission not in xml:
+                  match = re.search(r"<application\\b", xml)
+                  if not match:
+                      raise SystemExit("Tag <application> tidak ditemukan di AndroidManifest.xml")
+                  tag = f'<uses-permission android:name="{permission}" />\\n    '
+                  xml = xml[:match.start()] + tag + xml[match.start():]
+
+          if "firebase.messaging.default_notification_channel_id" not in xml:
+              metadata = ('    <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" '
+                          'android:value="raje_kampong_channel" />\\n    ')
+              xml = xml.replace("</application>", metadata + "</application>", 1)
+
+          path.write_text(xml, encoding="utf-8")
+          print("AndroidManifest.xml berhasil diperbarui")
+          PY
+
+                    echo "=== Android applicationId configuration ==="
           grep -n 'applicationId\|namespace\|minSdk' android/app/build.gradle* || true
           echo "=== Firebase package configuration ==="
           grep -n 'package_name' android/app/google-services.json
