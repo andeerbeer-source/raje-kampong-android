@@ -22,7 +22,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.29.0'
           channel: 'stable'
 
       - name: Generate Android Platform & Configure Firebase
@@ -33,19 +33,20 @@ jobs:
           # Samakan package name dengan google-services.json (tanpa garis bawah)
           sed -i 's/id.go.beltim.dprd.raje_kampong/id.go.beltim.dprd.rajekampong/g' android/app/build.gradle
 
-          # Naikkan versi Gradle Wrapper ke 8.5 agar mendukung AGP 8.3.2
-          sed -i 's/distributionUrl=.*/distributionUrl=https\\:\/\/services.gradle.org\/distributions\/gradle-8.5-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
-
-          # Naikkan versi AGP (8.3.2), Kotlin (2.1.0), & tambahkan plugin google-services di settings.gradle
-          sed -i 's/id "com.android.application" version ".*" apply false/id "com.android.application" version "8.3.2" apply false\n    id "com.google.gms.google-services" version "4.4.2" apply false/' android/settings.gradle
-          sed -i 's/id "org.jetbrains.kotlin.android" version ".*" apply false/id "org.jetbrains.kotlin.android" version "2.1.0" apply false/' android/settings.gradle
-
-          # Terapkan plugin google-services, ndkVersion, coreLibraryDesugaring, dan minSdk 23 di android/app/build.gradle
-          sed -i 's/id "com.android.application"/id "com.android.application"\n    id "com.google.gms.google-services"/' android/app/build.gradle
-          sed -i 's/ndkVersion = flutter.ndkVersion/ndkVersion = "25.1.8937393"/' android/app/build.gradle
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle
-          sed -i 's/compileOptions {/compileOptions {\n        coreLibraryDesugaringEnabled true/' android/app/build.gradle
-          echo -e "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'\n}" >> android/app/build.gradle
+          # Tambahkan plugin google-services di settings.gradle (atau settings.gradle.kts)
+          if [ -f android/settings.gradle.kts ]; then
+            sed -i 's/id("com.android.application") version ".*" apply false/&\n    id("com.google.gms.google-services") version "4.4.2" apply false/' android/settings.gradle.kts
+            sed -i 's/id("com.android.application")/id("com.android.application")\n    id("com.google.gms.google-services")/' android/app/build.gradle.kts
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts
+            sed -i 's/compileOptions {/compileOptions {\n        isCoreLibraryDesugaringEnabled = true/' android/app/build.gradle.kts
+            echo -e "\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")\n}" >> android/app/build.gradle.kts
+          else
+            sed -i 's/id "com.android.application" version ".*" apply false/&\n    id "com.google.gms.google-services" version "4.4.2" apply false/' android/settings.gradle
+            sed -i 's/id "com.android.application"/id "com.android.application"\n    id "com.google.gms.google-services"/' android/app/build.gradle
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle
+            sed -i 's/compileOptions {/compileOptions {\n        coreLibraryDesugaringEnabled true/' android/app/build.gradle
+            echo -e "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}" >> android/app/build.gradle
+          fi
 
           # Tambahkan izin notifikasi Android 13+ di AndroidManifest.xml
           sed -i 's/<uses-permission android:name="android.permission.INTERNET"\/>/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>/' android/app/src/main/AndroidManifest.xml
