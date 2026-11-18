@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "638910577278",
+    "project_id": "raje-kampong-dprd",
+    "storage_bucket": "raje-kampong-dprd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:638910577278:android:9ab1632cbd290f609a362f",
+        "android_client_info": {
+          "package_name": "id.go.beltim.dprd.rajekampong"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAN7YEsQ6hFhtGfHvWl5i2gELwmYpGhavQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
