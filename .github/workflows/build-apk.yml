@@ -46,13 +46,14 @@ jobs:
             echo -e "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}" >> android/app/build.gradle
           fi
 
-          # Tambahkan izin notifikasi Android 13+ di AndroidManifest.xml
+          # Tambahkan izin notifikasi Android 13+ dan channel default FCM di AndroidManifest.xml
           sed -i 's/<uses-permission android:name="android.permission.INTERNET"\/>/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<\/application>/    <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="raje_kampong_channel" \/>\n    <\/application>/' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies & Build Release APK
         run: |
           flutter pub get
-          flutter build apk --release
+          flutter build apk --release --no-shrink
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
