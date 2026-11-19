@@ -173,44 +173,57 @@ jobs:
           ls -lh "$APK"
           sha256sum "$APK"
 
+      - name: Prepare launcher test script
+        shell: bash
+        run: |
+          cat > launcher-test.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          APP_ID="id.go.beltim.dprd.rajekampong"
+          adb install -r "$APK"
+
+          ACTIVITY_FILE="$(find android/app/src/main -name MainActivity.kt -print -quit)"
+          if [ -z "$ACTIVITY_FILE" ]; then
+            ACTIVITY_FILE="$(find android/app/src/main -name MainActivity.java -print -quit)"
+          fi
+          if [ -z "$ACTIVITY_FILE" ]; then
+            echo "MainActivity.kt/java tidak ditemukan"
+            find android/app/src/main -type f -print
+            exit 1
+          fi
+
+          ACTIVITY_PACKAGE="$(sed -nE 's/^[[:space:]]*package[[:space:]]+([^;[:space:]]+).*/\1/p' "$ACTIVITY_FILE" | head -n 1)"
+          if [ -z "$ACTIVITY_PACKAGE" ]; then
+            echo "Package MainActivity tidak ditemukan: $ACTIVITY_FILE"
+            cat "$ACTIVITY_FILE"
+            exit 1
+          fi
+
+          ACTIVITY="$APP_ID/$ACTIVITY_PACKAGE.MainActivity"
+          echo "Activity source: $ACTIVITY_FILE"
+          echo "Launching: $ACTIVITY"
+          adb logcat -c
+          adb shell am force-stop "$APP_ID" || true
+          adb shell am start -W -n "$ACTIVITY"
+          sleep 8
+
+          CRASH_LOG="$(adb logcat -d -s AndroidRuntime:E)"
+          if echo "$CRASH_LOG" | grep -E "FATAL EXCEPTION|ClassNotFoundException|Unable to instantiate activity|Process: $APP_ID"; then
+            echo "Aplikasi crash saat launcher dijalankan"
+            exit 1
+          fi
+          echo "Launcher test passed."
+          EOF
+          chmod +x launcher-test.sh
+
       - name: Install APK on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_2
-          script: |
-            set -e
-            adb install -r build/app/outputs/flutter-apk/app-release.apk
-            APP_ID="id.go.beltim.dprd.rajekampong"
-            ACTIVITY_FILE="$(find android/app/src/main -type f \\( -name 'MainActivity.kt' -o -name 'MainActivity.java' \\) -print -quit)"
-            if [ -z "$ACTIVITY_FILE" ]; then
-              echo "MainActivity.kt/java tidak ditemukan:"
-              find android/app/src/main -maxdepth 8 -type f -print
-              exit 1
-            fi
-            ACTIVITY_PACKAGE="$(sed -nE 's/^[[:space:]]*package[[:space:]]+([^;[:space:]]+).*/\\1/p' "$ACTIVITY_FILE" | head -n 1)"
-            if [ -z "$ACTIVITY_PACKAGE" ]; then
-              echo "Package MainActivity tidak ditemukan dalam $ACTIVITY_FILE"
-              cat "$ACTIVITY_FILE"
-              exit 1
-            fi
-            echo "Activity source: $ACTIVITY_FILE"
-            echo "Launching $APP_ID/$ACTIVITY_PACKAGE.MainActivity"
-            adb logcat -c
-            START_OUTPUT="$(adb shell am start -W -n "$APP_ID/$ACTIVITY_PACKAGE.MainActivity" 2>&1)" || {
-              echo "$START_OUTPUT"
-              adb shell dumpsys package "$APP_ID" | grep -A8 -B3 -E 'MainActivity|LAUNCHER' || true
-              exit 1
-            }
-            echo "$START_OUTPUT"
-            echo "$START_OUTPUT" | grep -q "Status: ok"
-            sleep 8
-            if adb logcat -d -s AndroidRuntime:E | grep -E "FATAL EXCEPTION|ClassNotFoundException|Unable to instantiate activity|Process: $APP_ID" ; then
-              echo "Aplikasi crash saat launcher dijalankan"
-              exit 1
-            fi
-            echo "Launcher test passed: aplikasi berhasil dibuka di emulator."
+          script: bash ./launcher-test.sh
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
