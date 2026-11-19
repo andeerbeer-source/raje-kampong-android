@@ -47,7 +47,6 @@ jobs:
           cp google-services.json android/app/google-services.json
 
           if [ -f android/settings.gradle.kts ]; then
-            sed -i 's/id.go.beltim.dprd.raje_kampong/id.go.beltim.dprd.rajekampong/g' android/app/build.gradle.kts
             sed -i 's/id("com.android.application") version ".*" apply false/&\n    id("com.google.gms.google-services") version "4.4.2" apply false/' android/settings.gradle.kts
             sed -i 's/id("com.android.application")/id("com.android.application")\n    id("com.google.gms.google-services")/' android/app/build.gradle.kts
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts
@@ -59,7 +58,6 @@ jobs:
           }
           EOF
           else
-            sed -i 's/id.go.beltim.dprd.raje_kampong/id.go.beltim.dprd.rajekampong/g' android/app/build.gradle
             sed -i 's/id "com.android.application" version ".*" apply false/&\n    id "com.google.gms.google-services" version "4.4.2" apply false/' android/settings.gradle
             sed -i 's/id "com.android.application"/id "com.android.application"\n    id "com.google.gms.google-services"/' android/app/build.gradle
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle
@@ -72,7 +70,52 @@ jobs:
           EOF
           fi
 
-                    # Add required permissions and FCM channel robustly to generated manifest.
+          # Keep the Android namespace aligned with Flutter's generated MainActivity
+          # package, while using the Firebase-registered applicationId.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          kotlin_files = list(Path("android/app/src/main/kotlin").rglob("MainActivity.kt"))
+          if not kotlin_files:
+              raise SystemExit("MainActivity.kt tidak ditemukan setelah flutter create")
+          source = kotlin_files[0].read_text(encoding="utf-8")
+          match = re.search(r"^\\s*package\\s+([A-Za-z0-9_.]+)", source, re.MULTILINE)
+          if not match:
+              raise SystemExit("Deklarasi package MainActivity tidak ditemukan")
+          activity_package = match.group(1)
+          target_app_id = "id.go.beltim.dprd.rajekampong"
+
+          gradle_files = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          gradle = next((p for p in gradle_files if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("File Gradle aplikasi tidak ditemukan")
+          text = gradle.read_text(encoding="utf-8")
+
+          if re.search(r'namespace\\s*=\\s*"[^"]+"', text):
+              text = re.sub(r'namespace\\s*=\\s*"[^"]+"',
+                            f'namespace = "{activity_package}"', text, count=1)
+          elif re.search(r'namespace\\s+"[^"]+"', text):
+              text = re.sub(r'namespace\\s+"[^"]+"',
+                            f'namespace "{activity_package}"', text, count=1)
+          else:
+              raise SystemExit("Deklarasi namespace Gradle tidak ditemukan")
+
+          if re.search(r'applicationId\\s*=\\s*"[^"]+"', text):
+              text = re.sub(r'applicationId\\s*=\\s*"[^"]+"',
+                            f'applicationId = "{target_app_id}"', text, count=1)
+          elif re.search(r'applicationId\\s+"[^"]+"', text):
+              text = re.sub(r'applicationId\\s+"[^"]+"',
+                            f'applicationId "{target_app_id}"', text, count=1)
+          else:
+              raise SystemExit("Deklarasi applicationId Gradle tidak ditemukan")
+
+          gradle.write_text(text, encoding="utf-8")
+          print(f"namespace={activity_package}")
+          print(f"applicationId={target_app_id}")
+          PY
+
+          # Add required permissions and FCM channel robustly to generated manifest.
           python3 - <<'PY'
           from pathlib import Path
 
@@ -99,10 +142,13 @@ jobs:
           print("AndroidManifest.xml berhasil diperbarui")
           PY
           
-                              echo "=== Android applicationId configuration ==="
+                              echo "=== Android applicationId / namespace / MainActivity ==="
           grep -n 'applicationId\|namespace\|minSdk' android/app/build.gradle* || true
+          grep -R -n '^package ' android/app/src/main/kotlin
           echo "=== Firebase package configuration ==="
           grep -n 'package_name' android/app/google-services.json
+          grep -q 'android.intent.action.MAIN' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.intent.category.LAUNCHER' android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies & Build Release APK
         shell: bash
@@ -134,8 +180,19 @@ jobs:
           arch: x86_64
           profile: pixel_2
           script: |
+            set -e
             adb install -r build/app/outputs/flutter-apk/app-release.apk
-            adb shell monkey -p id.go.beltim.dprd.rajekampong 1
+            ACTIVITY_PACKAGE="$(grep -R '^package ' android/app/src/main/kotlin | head -n 1 | awk '{print $2}')"
+            test -n "$ACTIVITY_PACKAGE"
+            echo "Launching $ACTIVITY_PACKAGE.MainActivity"
+            START_OUTPUT="$(adb shell am start -W -n "id.go.beltim.dprd.rajekampong/$ACTIVITY_PACKAGE.MainActivity" 2>&1)"
+            echo "$START_OUTPUT"
+            echo "$START_OUTPUT" | grep -q "Status: ok"
+            sleep 5
+            if adb logcat -d -s AndroidRuntime:E | grep -E "FATAL EXCEPTION|ClassNotFoundException|Unable to instantiate activity" ; then
+              echo "Aplikasi crash saat launcher dijalankan"
+              exit 1
+            fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
