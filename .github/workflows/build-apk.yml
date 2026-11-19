@@ -80,7 +80,7 @@ jobs:
           if not kotlin_files:
               raise SystemExit("MainActivity.kt tidak ditemukan setelah flutter create")
           source = kotlin_files[0].read_text(encoding="utf-8")
-          match = re.search(r"^\\s*package\\s+([A-Za-z0-9_.]+)", source, re.MULTILINE)
+          match = re.search(r"^\s*package\s+([A-Za-z0-9_.]+)", source, re.MULTILINE)
           if not match:
               raise SystemExit("Deklarasi package MainActivity tidak ditemukan")
           activity_package = match.group(1)
@@ -92,20 +92,20 @@ jobs:
               raise SystemExit("File Gradle aplikasi tidak ditemukan")
           text = gradle.read_text(encoding="utf-8")
 
-          if re.search(r'namespace\\s*=\\s*"[^"]+"', text):
-              text = re.sub(r'namespace\\s*=\\s*"[^"]+"',
+          if re.search(r'namespace\s*=\s*"[^"]+"', text):
+              text = re.sub(r'namespace\s*=\s*"[^"]+"',
                             f'namespace = "{activity_package}"', text, count=1)
-          elif re.search(r'namespace\\s+"[^"]+"', text):
-              text = re.sub(r'namespace\\s+"[^"]+"',
+          elif re.search(r'namespace\s+"[^"]+"', text):
+              text = re.sub(r'namespace\s+"[^"]+"',
                             f'namespace "{activity_package}"', text, count=1)
           else:
               raise SystemExit("Deklarasi namespace Gradle tidak ditemukan")
 
-          if re.search(r'applicationId\\s*=\\s*"[^"]+"', text):
-              text = re.sub(r'applicationId\\s*=\\s*"[^"]+"',
+          if re.search(r'applicationId\s*=\s*"[^"]+"', text):
+              text = re.sub(r'applicationId\s*=\s*"[^"]+"',
                             f'applicationId = "{target_app_id}"', text, count=1)
-          elif re.search(r'applicationId\\s+"[^"]+"', text):
-              text = re.sub(r'applicationId\\s+"[^"]+"',
+          elif re.search(r'applicationId\s+"[^"]+"', text):
+              text = re.sub(r'applicationId\s+"[^"]+"',
                             f'applicationId "{target_app_id}"', text, count=1)
           else:
               raise SystemExit("Deklarasi applicationId Gradle tidak ditemukan")
